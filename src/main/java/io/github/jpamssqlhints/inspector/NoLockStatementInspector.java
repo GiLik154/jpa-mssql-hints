@@ -26,70 +26,151 @@ import java.util.stream.Collectors;
  */
 public class NoLockStatementInspector implements StatementInspector {
 
+    /**
+     * 변환 SQL 전용 로거. 사용처에서 {@code logging.level.io.github.jpamssqlhints.SQL=DEBUG}로
+     * 끄고 켤 수 있도록 클래스 로거와 분리.
+     */
+    private static final Logger SQL_LOG = LoggerFactory.getLogger("io.github.jpamssqlhints.SQL");
+
+    /** 클래스 로거 — 시작 시점 진단(WARN 등)에 사용. */
     private static final Logger log = LoggerFactory.getLogger(NoLockStatementInspector.class);
-
-    private final Mode mode;
-    private final TablePatternMatcher excludeTables;
-    private final TablePatternMatcher alwaysApplyTables;
-    private final boolean requireReadOnly;
-    private final boolean logTransformedSql;
-
-    public NoLockStatementInspector() {
-        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList(), false, false);
-    }
-
-    public NoLockStatementInspector(Mode mode) {
-        this(mode, Collections.emptyList(), Collections.emptyList(), false, false);
-    }
-
-    public NoLockStatementInspector(Mode mode, List<String> excludeTables) {
-        this(mode, excludeTables, Collections.emptyList(), false, false);
-    }
-
-    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables) {
-        this(mode, excludeTables, alwaysApplyTables, false, false);
-    }
-
-    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables, boolean requireReadOnly) {
-        this(mode, excludeTables, alwaysApplyTables, requireReadOnly, false);
-    }
-
-    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables,
-                                    boolean requireReadOnly, boolean logTransformedSql) {
-        this.mode = mode;
-        this.excludeTables = new TablePatternMatcher(excludeTables);
-        this.alwaysApplyTables = new TablePatternMatcher(alwaysApplyTables);
-        this.requireReadOnly = requireReadOnly;
-        this.logTransformedSql = logTransformedSql;
-    }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
 
     /** alias 자리에 와선 안 되는 SQL 키워드. 이게 다음 토큰이면 alias 없는 것으로 본다. */
     private static final String RESERVED = "(?:where|group|order|having|inner|left|right|full|cross|outer|join|on|union|intersect|except|limit|offset|fetch|with|for|option|set)\\b";
 
+    /** lookahead로 막을 힌트 키워드 — Hint enum에서 동적으로 생성되어 새 값 추가 시 자동 반영된다. */
+    private static final String HINT_TOKENS = Hint.regexAlternation();
+
+    /** 사용자가 직접 박은 힌트가 SQL 어딘가에 있으면 변환 전체를 스킵하기 위한 검사 패턴. */
+    private static final Pattern HINT_PRESENT = Pattern.compile(
+            "\\bwith\\s*\\(\\s*" + HINT_TOKENS + "\\b",
+            Pattern.CASE_INSENSITIVE
+    );
+
     /**
-     * 정규식 그룹 구조:
+     * FROM 또는 JOIN 뒤의 테이블 식별자를 매칭. 단일 패스로 둘 다 처리해 hot path 비용을 절반으로 줄인다.
+     * <p>정규식 그룹 구조:
      * <ul>
-     *   <li>group(1): "from " / "join " 키워드 + 공백</li>
+     *   <li>group(1): "from " 또는 "join " + 공백</li>
      *   <li>group(2): 테이블 식별자 (스키마.테이블 또는 [테이블] 가능)</li>
      *   <li>group(3): alias 부분 (있을 때) — 비어있을 수 있음</li>
      * </ul>
      */
-    private static final Pattern FROM_TABLE = Pattern.compile(
-            "(\\bfrom\\s+)(\\[?\\w+]?(?:\\.\\[?\\w+]?)?)((?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
+    private static final Pattern FROM_OR_JOIN_TABLE = Pattern.compile(
+            "(\\b(?:from|join)\\s+)(\\[?\\w+]?(?:\\.\\[?\\w+]?)?)((?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*" + HINT_TOKENS + ")",
             Pattern.CASE_INSENSITIVE
     );
 
-    private static final Pattern JOIN_TABLE = Pattern.compile(
-            "(\\bjoin\\s+)(\\[?\\w+]?(?:\\.\\[?\\w+]?)?)((?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
-            Pattern.CASE_INSENSITIVE
-    );
+    private final Mode mode;
+    private final TablePatternMatcher excludeTables;
+    private final TablePatternMatcher alwaysApplyTables;
+    private final boolean requireReadOnly;
+    private final boolean logTransformedSql;
+    private final int logTransformedSqlMaxLength;
+    private final int maxSqlLength;
+
+    /** Hibernate가 SPI로 직접 인스턴스화할 때 쓰는 기본 생성자. 일반적으로는 {@link #builder()} 사용. */
+    public NoLockStatementInspector() {
+        this(builder());
+    }
+
+    private NoLockStatementInspector(Builder b) {
+        this.mode = b.mode;
+        warnOnSchemaQualified(b.excludeTables, "exclude-tables");
+        warnOnSchemaQualified(b.alwaysApplyTables, "always-apply-tables");
+        this.excludeTables = new TablePatternMatcher(b.excludeTables);
+        this.alwaysApplyTables = new TablePatternMatcher(b.alwaysApplyTables);
+        this.requireReadOnly = b.requireReadOnly;
+        this.logTransformedSql = b.logTransformedSql;
+        this.logTransformedSqlMaxLength = b.logTransformedSqlMaxLength;
+        this.maxSqlLength = b.maxSqlLength;
+    }
+
+    /**
+     * exclude/alwaysApply 패턴에 {@code .} / {@code [} / {@code ]}가 포함되면 schema-qualified로
+     * 입력했을 가능성이 높지만 실제 테이블 비교는 schema-less다. 운영자 오해를 방지하기 위해 WARN.
+     */
+    private static void warnOnSchemaQualified(List<String> patterns, String optionName) {
+        if (patterns == null) return;
+        for (String p : patterns) {
+            if (p == null) continue;
+            if (p.indexOf('.') >= 0 || p.indexOf('[') >= 0 || p.indexOf(']') >= 0) {
+                log.warn("[jpa-mssql-hints] {} 패턴 '{}'에 schema/대괄호 문자가 포함되어 있습니다. " +
+                        "테이블 비교는 schema-less라 의도와 다르게 매칭되지 않을 수 있습니다 " +
+                        "(예: 'dbo.audit_log'은 'audit_log'와 매칭되지 않음).", optionName, p);
+            }
+        }
+    }
+
+    public static Builder builder() {
+        return new Builder();
+    }
+
+    /**
+     * 빌더. 외부 사용처는 이걸 우선 사용. 기존 생성자들은 하위 호환을 위해 유지된다.
+     */
+    public static final class Builder {
+        private Mode mode = Mode.ANNOTATION;
+        private List<String> excludeTables = Collections.emptyList();
+        private List<String> alwaysApplyTables = Collections.emptyList();
+        private boolean requireReadOnly = false;
+        private boolean logTransformedSql = false;
+        private int logTransformedSqlMaxLength = 0;
+        private int maxSqlLength = 0;
+
+        private Builder() {
+        }
+
+        public Builder mode(Mode mode) {
+            this.mode = mode;
+            return this;
+        }
+
+        public Builder excludeTables(List<String> excludeTables) {
+            this.excludeTables = excludeTables == null ? Collections.emptyList() : excludeTables;
+            return this;
+        }
+
+        public Builder alwaysApplyTables(List<String> alwaysApplyTables) {
+            this.alwaysApplyTables = alwaysApplyTables == null ? Collections.emptyList() : alwaysApplyTables;
+            return this;
+        }
+
+        public Builder requireReadOnly(boolean requireReadOnly) {
+            this.requireReadOnly = requireReadOnly;
+            return this;
+        }
+
+        public Builder logTransformedSql(boolean logTransformedSql) {
+            this.logTransformedSql = logTransformedSql;
+            return this;
+        }
+
+        public Builder logTransformedSqlMaxLength(int max) {
+            this.logTransformedSqlMaxLength = max;
+            return this;
+        }
+
+        public Builder maxSqlLength(int max) {
+            this.maxSqlLength = max;
+            return this;
+        }
+
+        public NoLockStatementInspector build() {
+            return new NoLockStatementInspector(this);
+        }
+    }
 
     @Override
     public String inspect(String sql) {
         // OFF 모드는 화이트리스트도 무시하는 절대 kill switch.
         if (sql == null || mode == Mode.OFF) {
+            return sql;
+        }
+        // 매우 긴 SQL에 대한 ReDoS/CPU 폭주 방어. 0 이하면 무제한.
+        if (maxSqlLength > 0 && sql.length() > maxSqlLength) {
             return sql;
         }
         if (!SELECT_HEAD.matcher(sql).find()) {
@@ -110,13 +191,23 @@ public class NoLockStatementInspector implements StatementInspector {
             return sql;
         }
         String hintExpr = buildHintExpression();
-        String result = appendHint(sql, FROM_TABLE, defaultActive, hintExpr);
-        result = appendHint(result, JOIN_TABLE, defaultActive, hintExpr);
+        String result = appendHint(sql, FROM_OR_JOIN_TABLE, defaultActive, hintExpr);
         if (logTransformedSql && !result.equals(sql)) {
-            log.info("[jpa-mssql-hints] before: {}", sql);
-            log.info("[jpa-mssql-hints] after : {}", result);
+            SQL_LOG.debug("[jpa-mssql-hints] before: {}", truncateForLog(sql));
+            SQL_LOG.debug("[jpa-mssql-hints] after : {}", truncateForLog(result));
         }
         return result;
+    }
+
+    /**
+     * 운영 로그에 SQL 인라인 리터럴(이메일/토큰 등)이 흘러갈 위험을 줄이기 위한 truncate.
+     * {@code logTransformedSqlMaxLength <= 0} 또는 길이 미만이면 원본 그대로.
+     */
+    private String truncateForLog(String s) {
+        if (logTransformedSqlMaxLength <= 0 || s.length() <= logTransformedSqlMaxLength) {
+            return s;
+        }
+        return s.substring(0, logTransformedSqlMaxLength) + "... (truncated)";
     }
 
     /**
@@ -141,20 +232,12 @@ public class NoLockStatementInspector implements StatementInspector {
     private String buildHintExpression() {
         Set<Hint> ctx = HintContext.currentHints();
         EnumSet<Hint> hints = ctx.isEmpty() ? EnumSet.of(Hint.NOLOCK) : EnumSet.copyOf(ctx);
-        return "WITH (" + hints.stream().map(Enum::name).collect(Collectors.joining(", ")) + ")";
+        return "WITH (" + hints.stream().map(Hint::sqlToken).collect(Collectors.joining(", ")) + ")";
     }
 
     private boolean alreadyHasHint(String sql) {
-        String lower = sql.toLowerCase();
-        // 가장 흔한 케이스 빠른 검사 + 일반화: with ( anything )
-        return lower.contains("with (nolock)") || lower.contains("with(nolock)")
-                || HINT_PRESENT.matcher(sql).find();
+        return HINT_PRESENT.matcher(sql).find();
     }
-
-    private static final Pattern HINT_PRESENT = Pattern.compile(
-            "\\bwith\\s*\\(\\s*(?:nolock|readpast|updlock|rowlock)\\b",
-            Pattern.CASE_INSENSITIVE
-    );
 
     /**
      * 테이블별 적용 여부:

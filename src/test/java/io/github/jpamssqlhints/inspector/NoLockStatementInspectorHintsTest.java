@@ -13,7 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class NoLockStatementInspectorHintsTest {
 
-    private final NoLockStatementInspector inspector = new NoLockStatementInspector(Mode.ANNOTATION);
+    private final NoLockStatementInspector inspector = NoLockStatementInspector.builder().mode(Mode.ANNOTATION).build();
 
     @AfterEach
     void cleanup() {
@@ -66,7 +66,7 @@ class NoLockStatementInspectorHintsTest {
     @Test
     @DisplayName("GLOBAL 모드에서 컨텍스트가 비어있으면 기본 NOLOCK 적용 (하위 호환)")
     void GLOBAL_기본_NOLOCK() {
-        NoLockStatementInspector global = new NoLockStatementInspector(Mode.GLOBAL);
+        NoLockStatementInspector global = NoLockStatementInspector.builder().mode(Mode.GLOBAL).build();
         // HintContext 비활성
         String result = global.inspect("select * from member where id = 1");
         assertThat(result).contains("WITH (NOLOCK)");
@@ -75,19 +75,13 @@ class NoLockStatementInspectorHintsTest {
     @Test
     @DisplayName("화이트리스트도 컨텍스트 힌트 종류를 따름 (READPAST 컨텍스트면 READPAST 적용)")
     void 화이트리스트_컨텍스트_힌트_따름() {
-        NoLockStatementInspector inspector = new NoLockStatementInspector(
-                Mode.ANNOTATION, java.util.List.of(), java.util.List.of("dashboard")
-        );
+        NoLockStatementInspector inspector = NoLockStatementInspector.builder()
+                .mode(Mode.ANNOTATION)
+                .alwaysApplyTables(java.util.List.of("dashboard"))
+                .build();
         HintContext.enter(Set.of(Hint.READPAST));
         String result = inspector.inspect("select * from dashboard where id = 1");
         assertThat(result).contains("WITH (READPAST)");
     }
 
-    @Test
-    @DisplayName("@NoLock 호환 — NoLockContext.enter()로도 NOLOCK 적용")
-    void NoLockContext_호환() {
-        io.github.jpamssqlhints.context.NoLockContext.enter();
-        String result = inspector.inspect("select * from member where id = 1");
-        assertThat(result).contains("WITH (NOLOCK)");
-    }
 }

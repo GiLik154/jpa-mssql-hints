@@ -1,6 +1,8 @@
 package io.github.jpamssqlhints.annotation;
 
+import java.lang.annotation.Documented;
 import java.lang.annotation.ElementType;
+import java.lang.annotation.Inherited;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
@@ -12,8 +14,12 @@ import java.lang.annotation.Target;
  * <p>주의: NOLOCK은 사실상 READ UNCOMMITTED와 같아 dirty/phantom read를
  * 허용합니다. 정합성이 중요한 경로에는 사용하지 말고, 가능하면 RCSI
  * (READ_COMMITTED_SNAPSHOT ON)를 먼저 검토하세요.
+ *
+ * <p>{@link Inherited} — 클래스 레벨 어노테이션은 자식 클래스에 상속됩니다(메서드 레벨은 제외).
  */
 @Target({ElementType.METHOD, ElementType.TYPE})
 @Retention(RetentionPolicy.RUNTIME)
+@Documented
+@Inherited
 public @interface NoLock {
 }

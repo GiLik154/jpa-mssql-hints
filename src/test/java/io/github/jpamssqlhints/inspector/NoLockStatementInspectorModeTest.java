@@ -1,11 +1,14 @@
 package io.github.jpamssqlhints.inspector;
 
+import io.github.jpamssqlhints.annotation.Hint;
 import io.github.jpamssqlhints.config.Mode;
-import io.github.jpamssqlhints.context.NoLockContext;
+import io.github.jpamssqlhints.context.HintContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -15,8 +18,8 @@ class NoLockStatementInspectorModeTest {
 
     @AfterEach
     void cleanup() {
-        while (NoLockContext.isActive()) {
-            NoLockContext.exit();
+        while (HintContext.isActive()) {
+            HintContext.exit();
         }
     }
 
@@ -24,7 +27,7 @@ class NoLockStatementInspectorModeTest {
     @DisplayName("Mode.ANNOTATION (기본)")
     class ANNOTATION_모드 {
 
-        private final NoLockStatementInspector inspector = new NoLockStatementInspector(Mode.ANNOTATION);
+        private final NoLockStatementInspector inspector = NoLockStatementInspector.builder().mode(Mode.ANNOTATION).build();
 
         @Test
         @DisplayName("NoLockContext 비활성이면 변환 안 됨")
@@ -35,7 +38,7 @@ class NoLockStatementInspectorModeTest {
         @Test
         @DisplayName("NoLockContext 활성이면 NOLOCK 적용")
         void 활성_적용() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
             assertThat(inspector.inspect(SELECT_SQL)).containsIgnoringCase("WITH (NOLOCK)");
         }
     }
@@ -44,7 +47,7 @@ class NoLockStatementInspectorModeTest {
     @DisplayName("Mode.GLOBAL")
     class GLOBAL_모드 {
 
-        private final NoLockStatementInspector inspector = new NoLockStatementInspector(Mode.GLOBAL);
+        private final NoLockStatementInspector inspector = NoLockStatementInspector.builder().mode(Mode.GLOBAL).build();
 
         @Test
         @DisplayName("NoLockContext 비활성이어도 모든 SELECT에 NOLOCK 적용")
@@ -66,12 +69,12 @@ class NoLockStatementInspectorModeTest {
     @DisplayName("Mode.OFF")
     class OFF_모드 {
 
-        private final NoLockStatementInspector inspector = new NoLockStatementInspector(Mode.OFF);
+        private final NoLockStatementInspector inspector = NoLockStatementInspector.builder().mode(Mode.OFF).build();
 
         @Test
         @DisplayName("NoLockContext 활성이어도 변환하지 않음 (kill switch)")
         void 활성이어도_미적용() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
             assertThat(inspector.inspect(SELECT_SQL)).isEqualTo(SELECT_SQL);
         }
 

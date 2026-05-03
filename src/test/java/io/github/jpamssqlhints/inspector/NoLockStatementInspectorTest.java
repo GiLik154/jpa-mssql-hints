@@ -1,6 +1,7 @@
 package io.github.jpamssqlhints.inspector;
 
-import io.github.jpamssqlhints.context.NoLockContext;
+import io.github.jpamssqlhints.annotation.Hint;
+import io.github.jpamssqlhints.context.HintContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -10,6 +11,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.Set;
+
 import static org.assertj.core.api.Assertions.assertThat;
 
 class NoLockStatementInspectorTest {
@@ -18,8 +21,8 @@ class NoLockStatementInspectorTest {
 
     @AfterEach
     void cleanup() {
-        while (NoLockContext.isActive()) {
-            NoLockContext.exit();
+        while (HintContext.isActive()) {
+            HintContext.exit();
         }
     }
 
@@ -61,7 +64,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest
@@ -92,7 +95,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest(name = "[{index}] {0} → {1}")
@@ -122,7 +125,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest
@@ -177,7 +180,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest(name = "[{index}] {0}")
@@ -221,7 +224,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest(name = "[{index}] from member {0} ...")
@@ -264,7 +267,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @ParameterizedTest(name = "[{index}] {0}")
@@ -274,9 +277,14 @@ class NoLockStatementInspectorTest {
                 "select * from member WITH(NOLOCK) where id = 1",
                 "select * from member with(nolock) where id = 1",
                 "select * from member WITH (NoLock) where id = 1",
-                "select m.id from member m WITH (NOLOCK) inner join orders o WITH (NOLOCK) on m.id = o.member_id"
+                "select m.id from member m WITH (NOLOCK) inner join orders o WITH (NOLOCK) on m.id = o.member_id",
+                // R1: NOLOCK 외 다른 힌트가 박혀 있어도 그대로 보호되어야 함
+                "select * from member WITH (READPAST) where id = 1",
+                "select * from member WITH (UPDLOCK) where id = 1",
+                "select * from member WITH (ROWLOCK) where id = 1",
+                "select * from member WITH (UPDLOCK, ROWLOCK) where id = 1"
         })
-        @DisplayName("이미 NOLOCK이 있는 SQL은 그대로 반환")
+        @DisplayName("이미 어떤 힌트라도 있는 SQL은 그대로 반환")
         void 그대로_반환(String sql) {
             String result = inspector.inspect(sql);
             assertThat(result).isEqualTo(sql);
@@ -307,7 +315,7 @@ class NoLockStatementInspectorTest {
 
         @BeforeEach
         void enter() {
-            NoLockContext.enter();
+            HintContext.enter(Set.of(Hint.NOLOCK));
         }
 
         @Test
@@ -353,11 +361,11 @@ class NoLockStatementInspectorTest {
         assertThat(inspector.inspect(sql)).isEqualTo(sql);
 
         // 활성
-        NoLockContext.enter();
+        HintContext.enter(Set.of(Hint.NOLOCK));
         assertThat(inspector.inspect(sql)).containsIgnoringCase("WITH (NOLOCK)");
 
         // 다시 비활성
-        NoLockContext.exit();
+        HintContext.exit();
         assertThat(inspector.inspect(sql)).isEqualTo(sql);
     }
 }
