@@ -46,4 +46,35 @@ public final class HintContext {
     public static boolean isActive() {
         return !STACK.get().isEmpty();
     }
+
+    /**
+     * try-with-resources 패턴으로 안전하게 힌트 스코프를 연다.
+     * <p>스코프 종료 시 자동으로 {@link #exit()}이 호출되어 finally를 빠뜨려 ThreadLocal이
+     * 누수되는 위험을 구조적으로 차단한다.
+     *
+     * <pre>{@code
+     * try (HintContext.Scope s = HintContext.open(Set.of(Hint.NOLOCK))) {
+     *     // SELECT 발급 — NOLOCK 자동 적용
+     * }
+     * }</pre>
+     */
+    public static Scope open(Set<Hint> hints) {
+        enter(hints);
+        return new Scope();
+    }
+
+    /** {@link #open(Set)}이 반환하는 try-with-resources 토큰. */
+    public static final class Scope implements AutoCloseable {
+        private boolean closed;
+
+        private Scope() {
+        }
+
+        @Override
+        public void close() {
+            if (closed) return;
+            closed = true;
+            exit();
+        }
+    }
 }

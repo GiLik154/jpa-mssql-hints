@@ -27,6 +27,12 @@ class TableHintAspectIntegrationTest {
     @Autowired
     private ClassLevelHintService classLevel;
 
+    @Autowired
+    private MethodOverridesClassService methodOverrides;
+
+    @Autowired
+    private EmptyMethodAnnotationService emptyMethod;
+
     @Test
     void NOLOCK_단일() {
         assertThat(single.callNoLock()).isEqualTo(Set.of(Hint.NOLOCK));
@@ -47,6 +53,18 @@ class TableHintAspectIntegrationTest {
     @Test
     void 클래스_레벨_TableHint() {
         assertThat(classLevel.callPlain()).isEqualTo(Set.of(Hint.READPAST));
+    }
+
+    @Test
+    void 메서드_TableHint가_클래스_TableHint를_덮어쓴다() {
+        // 클래스에는 NOLOCK, 메서드에는 READPAST → 메서드만 적용
+        assertThat(methodOverrides.callOverridden()).isEqualTo(Set.of(Hint.READPAST));
+    }
+
+    @Test
+    void 메서드_빈_TableHint로_클래스_단위_적용을_끌_수_있다() {
+        // 클래스에는 NOLOCK, 메서드에는 빈 @TableHint({}) → 어떤 힌트도 안 박힘
+        assertThat(emptyMethod.callOff()).isEmpty();
     }
 
     @Test
@@ -80,6 +98,16 @@ class TableHintAspectIntegrationTest {
         ClassLevelHintService classLevel() {
             return new ClassLevelHintService();
         }
+
+        @Bean
+        MethodOverridesClassService methodOverrides() {
+            return new MethodOverridesClassService();
+        }
+
+        @Bean
+        EmptyMethodAnnotationService emptyMethod() {
+            return new EmptyMethodAnnotationService();
+        }
     }
 
     @Component
@@ -112,6 +140,24 @@ class TableHintAspectIntegrationTest {
     @TableHint(Hint.READPAST)
     static class ClassLevelHintService {
         Set<Hint> callPlain() {
+            return HintContext.currentHints();
+        }
+    }
+
+    @Component
+    @TableHint(Hint.NOLOCK)
+    static class MethodOverridesClassService {
+        @TableHint(Hint.READPAST)
+        Set<Hint> callOverridden() {
+            return HintContext.currentHints();
+        }
+    }
+
+    @Component
+    @TableHint(Hint.NOLOCK)
+    static class EmptyMethodAnnotationService {
+        @TableHint({})
+        Set<Hint> callOff() {
             return HintContext.currentHints();
         }
     }

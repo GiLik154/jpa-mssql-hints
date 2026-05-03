@@ -1,6 +1,5 @@
 package io.github.jpamssqlhints.config;
 
-import io.github.jpamssqlhints.aspect.NoLockAspect;
 import io.github.jpamssqlhints.aspect.TableHintAspect;
 import io.github.jpamssqlhints.inspector.NoLockStatementInspector;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -17,7 +16,7 @@ import org.springframework.context.annotation.EnableAspectJAutoProxy;
         "org.hibernate.resource.jdbc.spi.StatementInspector",
         "org.aspectj.lang.ProceedingJoinPoint"
 })
-@ConditionalOnProperty(prefix = "jpa-mssql-hints", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnProperty(prefix = "jpa-mssql-hints", name = "enabled", havingValue = "true")
 @EnableConfigurationProperties(JpaMssqlHintsProperties.class)
 @EnableAspectJAutoProxy
 public class JpaMssqlHintsAutoConfiguration {
@@ -25,24 +24,20 @@ public class JpaMssqlHintsAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     public NoLockStatementInspector noLockStatementInspector(JpaMssqlHintsProperties properties) {
-        return new NoLockStatementInspector(
-                properties.mode(),
-                properties.excludeTables(),
-                properties.alwaysApplyTables(),
-                properties.requireReadOnly(),
-                properties.logTransformedSql()
-        );
+        return NoLockStatementInspector.builder()
+                .mode(properties.mode())
+                .excludeTables(properties.excludeTables())
+                .alwaysApplyTables(properties.alwaysApplyTables())
+                .requireReadOnly(properties.requireReadOnly())
+                .logTransformedSql(properties.logTransformedSql())
+                .logTransformedSqlMaxLength(properties.logTransformedSqlMaxLength())
+                .maxSqlLength(properties.maxSqlLength())
+                .build();
     }
 
     @Bean
     public HibernatePropertiesCustomizer noLockHibernateCustomizer(NoLockStatementInspector inspector) {
         return props -> props.put("hibernate.session_factory.statement_inspector", inspector);
-    }
-
-    @Bean
-    @ConditionalOnMissingBean
-    public NoLockAspect noLockAspect() {
-        return new NoLockAspect();
     }
 
     @Bean
