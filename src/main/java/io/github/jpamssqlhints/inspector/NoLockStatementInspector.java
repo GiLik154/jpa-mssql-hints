@@ -4,6 +4,9 @@ import io.github.jpamssqlhints.config.Mode;
 import io.github.jpamssqlhints.context.NoLockContext;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 
+import java.util.Collections;
+import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -17,13 +20,20 @@ import java.util.regex.Pattern;
 public class NoLockStatementInspector implements StatementInspector {
 
     private final Mode mode;
+    private final List<String> excludeTables;
 
     public NoLockStatementInspector() {
-        this(Mode.ANNOTATION);
+        this(Mode.ANNOTATION, Collections.emptyList());
     }
 
     public NoLockStatementInspector(Mode mode) {
+        this(mode, Collections.emptyList());
+    }
+
+    public NoLockStatementInspector(Mode mode, List<String> excludeTables) {
         this.mode = mode;
+        this.excludeTables = excludeTables == null ? Collections.emptyList()
+                : excludeTables.stream().map(String::toLowerCase).toList();
     }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
@@ -31,13 +41,21 @@ public class NoLockStatementInspector implements StatementInspector {
     /** alias 자리에 와선 안 되는 SQL 키워드. 이게 다음 토큰이면 alias 없는 것으로 본다. */
     private static final String RESERVED = "(?:where|group|order|having|inner|left|right|full|cross|outer|join|on|union|intersect|except|limit|offset|fetch|with|for|option|set)\\b";
 
+    /**
+     * 정규식 그룹 구조:
+     * <ul>
+     *   <li>group(1): "from " / "join " 키워드 + 공백</li>
+     *   <li>group(2): 테이블 식별자 (스키마.테이블 또는 [테이블] 가능)</li>
+     *   <li>group(3): alias 부분 (있을 때) — 비어있을 수 있음</li>
+     * </ul>
+     */
     private static final Pattern FROM_TABLE = Pattern.compile(
-            "(\\bfrom\\s+\\[?\\w+]?(?:\\.\\[?\\w+]?)?(?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
+            "(\\bfrom\\s+)(\\[?\\w+]?(?:\\.\\[?\\w+]?)?)((?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
             Pattern.CASE_INSENSITIVE
     );
 
     private static final Pattern JOIN_TABLE = Pattern.compile(
-            "(\\bjoin\\s+\\[?\\w+]?(?:\\.\\[?\\w+]?)?(?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
+            "(\\bjoin\\s+)(\\[?\\w+]?(?:\\.\\[?\\w+]?)?)((?:\\s+(?:as\\s+)?(?!" + RESERVED + ")\\w+)?)(?!\\s*with\\s*\\(\\s*nolock\\s*\\))",
             Pattern.CASE_INSENSITIVE
     );
 
@@ -77,6 +95,27 @@ public class NoLockStatementInspector implements StatementInspector {
     }
 
     private String appendHint(String sql, Pattern pattern) {
-        return pattern.matcher(sql).replaceAll("$1 WITH (NOLOCK)");
+        Matcher m = pattern.matcher(sql);
+        StringBuilder sb = new StringBuilder();
+        while (m.find()) {
+            String tableName = extractTableName(m.group(2));
+            String original = m.group();
+            String replacement = excludeTables.contains(tableName)
+                    ? original
+                    : original + " WITH (NOLOCK)";
+            m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
+    /**
+     * "dbo.member" / "[dbo].[member]" / "member" → "member" (소문자)
+     */
+    private String extractTableName(String tableExpr) {
+        String trimmed = tableExpr.trim();
+        int dotIdx = trimmed.lastIndexOf('.');
+        String last = dotIdx >= 0 ? trimmed.substring(dotIdx + 1) : trimmed;
+        return last.replace("[", "").replace("]", "").toLowerCase();
     }
 }
