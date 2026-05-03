@@ -23,8 +23,8 @@ public class JpaMssqlHintsAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean
-    public NoLockStatementInspector noLockStatementInspector() {
-        return new NoLockStatementInspector();
+    public NoLockStatementInspector noLockStatementInspector(JpaMssqlHintsProperties properties) {
+        return new NoLockStatementInspector(properties.mode());
     }
 
     @Bean

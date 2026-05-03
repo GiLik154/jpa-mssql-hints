@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue;
  */
 @ConfigurationProperties("jpa-mssql-hints")
 public record JpaMssqlHintsProperties(
-        @DefaultValue("true") boolean enabled
+        @DefaultValue("true") boolean enabled,
+        @DefaultValue("ANNOTATION") Mode mode
 ) {
 }

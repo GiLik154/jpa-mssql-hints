@@ -1,5 +1,6 @@
 package io.github.jpamssqlhints.inspector;
 
+import io.github.jpamssqlhints.config.Mode;
 import io.github.jpamssqlhints.context.NoLockContext;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 
@@ -14,6 +15,16 @@ import java.util.regex.Pattern;
  * 쿼리는 보장하지 않습니다. 운영 도입 전에 발급 SQL을 로깅으로 검증하세요.
  */
 public class NoLockStatementInspector implements StatementInspector {
+
+    private final Mode mode;
+
+    public NoLockStatementInspector() {
+        this(Mode.ANNOTATION);
+    }
+
+    public NoLockStatementInspector(Mode mode) {
+        this.mode = mode;
+    }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
 
@@ -32,7 +43,7 @@ public class NoLockStatementInspector implements StatementInspector {
 
     @Override
     public String inspect(String sql) {
-        if (sql == null || !NoLockContext.isActive()) {
+        if (sql == null || !shouldApply()) {
             return sql;
         }
         if (!SELECT_HEAD.matcher(sql).find()) {
@@ -47,6 +58,22 @@ public class NoLockStatementInspector implements StatementInspector {
         String result = appendHint(sql, FROM_TABLE);
         result = appendHint(result, JOIN_TABLE);
         return result;
+    }
+
+    /**
+     * 모드별 적용 여부 결정.
+     * <ul>
+     *   <li>OFF: 항상 미적용 (kill switch)</li>
+     *   <li>GLOBAL: 어노테이션과 무관하게 항상 적용</li>
+     *   <li>ANNOTATION: NoLockContext가 활성일 때만 적용</li>
+     * </ul>
+     */
+    private boolean shouldApply() {
+        return switch (mode) {
+            case OFF -> false;
+            case GLOBAL -> true;
+            case ANNOTATION -> NoLockContext.isActive();
+        };
     }
 
     private String appendHint(String sql, Pattern pattern) {
