@@ -8,4 +8,5 @@ out/
 # 로컬 작업 가이드 (개인 Claude Code 컨텍스트)
 CLAUDE.md
 CHECKLIST.md
+DEMO_TEST.md
 .claude/
