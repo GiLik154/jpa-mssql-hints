@@ -3,6 +3,7 @@ package io.github.jpamssqlhints.inspector;
 import io.github.jpamssqlhints.config.Mode;
 import io.github.jpamssqlhints.context.NoLockContext;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Collections;
 import java.util.List;
@@ -22,23 +23,29 @@ public class NoLockStatementInspector implements StatementInspector {
     private final Mode mode;
     private final TablePatternMatcher excludeTables;
     private final TablePatternMatcher alwaysApplyTables;
+    private final boolean requireReadOnly;
 
     public NoLockStatementInspector() {
-        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList());
+        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList(), false);
     }
 
     public NoLockStatementInspector(Mode mode) {
-        this(mode, Collections.emptyList(), Collections.emptyList());
+        this(mode, Collections.emptyList(), Collections.emptyList(), false);
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables) {
-        this(mode, excludeTables, Collections.emptyList());
+        this(mode, excludeTables, Collections.emptyList(), false);
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables) {
+        this(mode, excludeTables, alwaysApplyTables, false);
+    }
+
+    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables, boolean requireReadOnly) {
         this.mode = mode;
         this.excludeTables = new TablePatternMatcher(excludeTables);
         this.alwaysApplyTables = new TablePatternMatcher(alwaysApplyTables);
+        this.requireReadOnly = requireReadOnly;
     }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
@@ -71,6 +78,10 @@ public class NoLockStatementInspector implements StatementInspector {
             return sql;
         }
         if (!SELECT_HEAD.matcher(sql).find()) {
+            return sql;
+        }
+        // requireReadOnly=true면 readOnly 트랜잭션 안에서만 적용. 쓰기/무트랜잭션은 거부.
+        if (requireReadOnly && !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             return sql;
         }
         boolean defaultActive = isDefaultActive();

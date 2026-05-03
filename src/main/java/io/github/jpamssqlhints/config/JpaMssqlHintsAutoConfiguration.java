@@ -27,7 +27,8 @@ public class JpaMssqlHintsAutoConfiguration {
         return new NoLockStatementInspector(
                 properties.mode(),
                 properties.excludeTables(),
-                properties.alwaysApplyTables()
+                properties.alwaysApplyTables(),
+                properties.requireReadOnly()
         );
     }
 
