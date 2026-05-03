@@ -1,16 +1,20 @@
 package io.github.jpamssqlhints.inspector;
 
+import io.github.jpamssqlhints.annotation.Hint;
 import io.github.jpamssqlhints.config.Mode;
-import io.github.jpamssqlhints.context.NoLockContext;
+import io.github.jpamssqlhints.context.HintContext;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Hibernate가 SQL을 발급하기 직전에 호출되는 SPI 구현체. 현재 스레드가
@@ -100,14 +104,14 @@ public class NoLockStatementInspector implements StatementInspector {
         if (!defaultActive && alwaysApplyTables.isEmpty()) {
             return sql;
         }
-        // 이미 NOLOCK이 적용된 SQL은 추가 변환하지 않는다. 부분 매치로 인한
-        // 중복 삽입 위험을 피하고 사용처가 직접 작성한 native query를 보호.
-        String lower = sql.toLowerCase();
-        if (lower.contains("with (nolock)") || lower.contains("with(nolock)")) {
+        // 이미 어떤 형태의 WITH 힌트가 박혀 있으면 추가 변환하지 않는다.
+        // native query 보호 + 부분 매치로 인한 중복 삽입 위험 회피.
+        if (alreadyHasHint(sql)) {
             return sql;
         }
-        String result = appendHint(sql, FROM_TABLE, defaultActive);
-        result = appendHint(result, JOIN_TABLE, defaultActive);
+        String hintExpr = buildHintExpression();
+        String result = appendHint(sql, FROM_TABLE, defaultActive, hintExpr);
+        result = appendHint(result, JOIN_TABLE, defaultActive, hintExpr);
         if (logTransformedSql && !result.equals(sql)) {
             log.info("[jpa-mssql-hints] before: {}", sql);
             log.info("[jpa-mssql-hints] after : {}", result);
@@ -117,19 +121,40 @@ public class NoLockStatementInspector implements StatementInspector {
 
     /**
      * 모드/컨텍스트 기반 기본 적용 여부.
-     * <ul>
-     *   <li>GLOBAL: 항상 활성</li>
-     *   <li>ANNOTATION: NoLockContext가 활성일 때만</li>
-     * </ul>
      * (OFF는 inspect 진입 시점에 이미 걸러진다)
      */
     private boolean isDefaultActive() {
         return switch (mode) {
             case OFF -> false;
             case GLOBAL -> true;
-            case ANNOTATION -> NoLockContext.isActive();
+            case ANNOTATION -> HintContext.isActive();
         };
     }
+
+    /**
+     * 적용할 힌트 표현식 결정.
+     * <ul>
+     *   <li>HintContext가 비어있으면 기본 NOLOCK (GLOBAL/whitelist 호환성)</li>
+     *   <li>HintContext가 채워져 있으면 그 힌트들을 enum 순서대로 결합</li>
+     * </ul>
+     */
+    private String buildHintExpression() {
+        Set<Hint> ctx = HintContext.currentHints();
+        EnumSet<Hint> hints = ctx.isEmpty() ? EnumSet.of(Hint.NOLOCK) : EnumSet.copyOf(ctx);
+        return "WITH (" + hints.stream().map(Enum::name).collect(Collectors.joining(", ")) + ")";
+    }
+
+    private boolean alreadyHasHint(String sql) {
+        String lower = sql.toLowerCase();
+        // 가장 흔한 케이스 빠른 검사 + 일반화: with ( anything )
+        return lower.contains("with (nolock)") || lower.contains("with(nolock)")
+                || HINT_PRESENT.matcher(sql).find();
+    }
+
+    private static final Pattern HINT_PRESENT = Pattern.compile(
+            "\\bwith\\s*\\(\\s*(?:nolock|readpast|updlock|rowlock)\\b",
+            Pattern.CASE_INSENSITIVE
+    );
 
     /**
      * 테이블별 적용 여부:
@@ -139,7 +164,7 @@ public class NoLockStatementInspector implements StatementInspector {
      *   <li>그 외 → 모드/컨텍스트 기본값(defaultActive)</li>
      * </ol>
      */
-    private String appendHint(String sql, Pattern pattern, boolean defaultActive) {
+    private String appendHint(String sql, Pattern pattern, boolean defaultActive, String hintExpr) {
         Matcher m = pattern.matcher(sql);
         StringBuilder sb = new StringBuilder();
         while (m.find()) {
@@ -153,7 +178,7 @@ public class NoLockStatementInspector implements StatementInspector {
             } else {
                 apply = defaultActive;
             }
-            String replacement = apply ? original + " WITH (NOLOCK)" : original;
+            String replacement = apply ? original + " " + hintExpr : original;
             m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
         m.appendTail(sb);

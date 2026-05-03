@@ -1,6 +1,7 @@
 package io.github.jpamssqlhints.config;
 
 import io.github.jpamssqlhints.aspect.NoLockAspect;
+import io.github.jpamssqlhints.aspect.TableHintAspect;
 import io.github.jpamssqlhints.inspector.NoLockStatementInspector;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -42,5 +43,11 @@ public class JpaMssqlHintsAutoConfiguration {
     @ConditionalOnMissingBean
     public NoLockAspect noLockAspect() {
         return new NoLockAspect();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean
+    public TableHintAspect tableHintAspect() {
+        return new TableHintAspect();
     }
 }
