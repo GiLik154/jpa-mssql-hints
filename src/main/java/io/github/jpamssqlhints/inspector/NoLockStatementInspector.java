@@ -3,6 +3,8 @@ package io.github.jpamssqlhints.inspector;
 import io.github.jpamssqlhints.config.Mode;
 import io.github.jpamssqlhints.context.NoLockContext;
 import org.hibernate.resource.jdbc.spi.StatementInspector;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.Collections;
@@ -20,32 +22,41 @@ import java.util.regex.Pattern;
  */
 public class NoLockStatementInspector implements StatementInspector {
 
+    private static final Logger log = LoggerFactory.getLogger(NoLockStatementInspector.class);
+
     private final Mode mode;
     private final TablePatternMatcher excludeTables;
     private final TablePatternMatcher alwaysApplyTables;
     private final boolean requireReadOnly;
+    private final boolean logTransformedSql;
 
     public NoLockStatementInspector() {
-        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList(), false);
+        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList(), false, false);
     }
 
     public NoLockStatementInspector(Mode mode) {
-        this(mode, Collections.emptyList(), Collections.emptyList(), false);
+        this(mode, Collections.emptyList(), Collections.emptyList(), false, false);
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables) {
-        this(mode, excludeTables, Collections.emptyList(), false);
+        this(mode, excludeTables, Collections.emptyList(), false, false);
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables) {
-        this(mode, excludeTables, alwaysApplyTables, false);
+        this(mode, excludeTables, alwaysApplyTables, false, false);
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables, boolean requireReadOnly) {
+        this(mode, excludeTables, alwaysApplyTables, requireReadOnly, false);
+    }
+
+    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables,
+                                    boolean requireReadOnly, boolean logTransformedSql) {
         this.mode = mode;
         this.excludeTables = new TablePatternMatcher(excludeTables);
         this.alwaysApplyTables = new TablePatternMatcher(alwaysApplyTables);
         this.requireReadOnly = requireReadOnly;
+        this.logTransformedSql = logTransformedSql;
     }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
@@ -97,6 +108,10 @@ public class NoLockStatementInspector implements StatementInspector {
         }
         String result = appendHint(sql, FROM_TABLE, defaultActive);
         result = appendHint(result, JOIN_TABLE, defaultActive);
+        if (logTransformedSql && !result.equals(sql)) {
+            log.info("[jpa-mssql-hints] before: {}", sql);
+            log.info("[jpa-mssql-hints] after : {}", result);
+        }
         return result;
     }
 

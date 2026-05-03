@@ -28,7 +28,8 @@ public class JpaMssqlHintsAutoConfiguration {
                 properties.mode(),
                 properties.excludeTables(),
                 properties.alwaysApplyTables(),
-                properties.requireReadOnly()
+                properties.requireReadOnly(),
+                properties.logTransformedSql()
         );
     }
 

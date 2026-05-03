@@ -15,6 +15,7 @@ public record JpaMssqlHintsProperties(
         @DefaultValue("ANNOTATION") Mode mode,
         @DefaultValue({}) List<String> excludeTables,
         @DefaultValue({}) List<String> alwaysApplyTables,
-        @DefaultValue("false") boolean requireReadOnly
+        @DefaultValue("false") boolean requireReadOnly,
+        @DefaultValue("false") boolean logTransformedSql
 ) {
 }
