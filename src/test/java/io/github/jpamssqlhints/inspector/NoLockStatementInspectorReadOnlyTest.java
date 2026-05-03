@@ -33,9 +33,9 @@ class NoLockStatementInspectorReadOnlyTest {
         TransactionSynchronizationManager.setActualTransactionActive(true);
         TransactionSynchronizationManager.setCurrentTransactionReadOnly(true);
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .requireReadOnly(true)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .requireReadOnly(true)
+                                                                     .build();
         assertThat(inspector.inspect(SELECT_SQL)).containsIgnoringCase("WITH (NOLOCK)");
     }
 
@@ -45,9 +45,9 @@ class NoLockStatementInspectorReadOnlyTest {
         TransactionSynchronizationManager.setActualTransactionActive(true);
         TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .requireReadOnly(true)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .requireReadOnly(true)
+                                                                     .build();
         assertThat(inspector.inspect(SELECT_SQL)).isEqualTo(SELECT_SQL);
     }
 
@@ -56,9 +56,9 @@ class NoLockStatementInspectorReadOnlyTest {
     void 트랜잭션_없음_미적용() {
         // setActualTransactionActive 호출 안 함
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .requireReadOnly(true)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .requireReadOnly(true)
+                                                                     .build();
         assertThat(inspector.inspect(SELECT_SQL)).isEqualTo(SELECT_SQL);
     }
 
@@ -68,9 +68,9 @@ class NoLockStatementInspectorReadOnlyTest {
         TransactionSynchronizationManager.setActualTransactionActive(true);
         TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .requireReadOnly(false)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .requireReadOnly(false)
+                                                                     .build();
         assertThat(inspector.inspect(SELECT_SQL)).containsIgnoringCase("WITH (NOLOCK)");
     }
 
@@ -80,10 +80,10 @@ class NoLockStatementInspectorReadOnlyTest {
         TransactionSynchronizationManager.setActualTransactionActive(true);
         TransactionSynchronizationManager.setCurrentTransactionReadOnly(false);
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.ANNOTATION)
-                .alwaysApplyTables(List.of("member"))
-                .requireReadOnly(true)
-                .build();
+                                                                     .mode(Mode.ANNOTATION)
+                                                                     .alwaysApplyTables(List.of("member"))
+                                                                     .requireReadOnly(true)
+                                                                     .build();
         assertThat(inspector.inspect(SELECT_SQL)).isEqualTo(SELECT_SQL);
     }
 }

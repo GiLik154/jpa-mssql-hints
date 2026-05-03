@@ -44,9 +44,9 @@ class NoLockStatementInspectorLoggingTest {
     @DisplayName("logTransformedSql=true이고 SQL이 변환되면 로그 출력")
     void 변환되면_로그_출력() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .logTransformedSql(true)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(true)
+                                                                     .build();
         inspector.inspect("select * from member where id = 1");
 
         assertThat(appender.list)
@@ -55,12 +55,27 @@ class NoLockStatementInspectorLoggingTest {
     }
 
     @Test
+    @DisplayName("SELECT지만 모든 테이블이 블랙리스트라 결과가 원본과 동일하면 로그 없음")
+    void 결과가_원본과_같으면_로그_없음() {
+        NoLockStatementInspector inspector = NoLockStatementInspector.builder()
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("member"))
+                                                                     .logTransformedSql(true)
+                                                                     .build();
+        inspector.inspect("select * from member where id = 1");
+
+        assertThat(appender.list)
+                .as("매칭된 테이블이 모두 블랙되어 변환 결과가 원본과 동일 → 로그 안 남음")
+                .isEmpty();
+    }
+
+    @Test
     @DisplayName("logTransformedSql=true여도 변환이 일어나지 않으면 로그 없음")
     void 변환_없으면_로그_없음() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .logTransformedSql(true)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(true)
+                                                                     .build();
         inspector.inspect("insert into member values (1, 'a')");
 
         assertThat(appender.list)
@@ -72,9 +87,9 @@ class NoLockStatementInspectorLoggingTest {
     @DisplayName("logTransformedSql=false이면 변환되어도 로그 없음")
     void 옵션_꺼지면_로그_없음() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .logTransformedSql(false)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(false)
+                                                                     .build();
         inspector.inspect("select * from member where id = 1");
 
         assertThat(appender.list).isEmpty();
@@ -84,10 +99,10 @@ class NoLockStatementInspectorLoggingTest {
     @DisplayName("logTransformedSqlMaxLength가 양수면 SQL 로그가 잘리고 truncated 표시 부착")
     void 길이_제한이_있으면_truncate() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .logTransformedSql(true)
-                .logTransformedSqlMaxLength(20)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(true)
+                                                                     .logTransformedSqlMaxLength(20)
+                                                                     .build();
         inspector.inspect("select * from member where email = 'secret@example.com'");
 
         assertThat(appender.list)
@@ -99,13 +114,28 @@ class NoLockStatementInspectorLoggingTest {
     }
 
     @Test
+    @DisplayName("logTransformedSqlMaxLength=양수지만 SQL이 그 길이 이내면 자르지 않음")
+    void 길이_제한_안에_들어오면_그대로() {
+        NoLockStatementInspector inspector = NoLockStatementInspector.builder()
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(true)
+                                                                     .logTransformedSqlMaxLength(1000)
+                                                                     .build();
+        inspector.inspect("select * from member");
+
+        assertThat(appender.list)
+                .as("길이가 1000자 이내라 truncate 표시 없어야 함")
+                .noneMatch(event -> event.getFormattedMessage().contains("(truncated)"));
+    }
+
+    @Test
     @DisplayName("logTransformedSqlMaxLength=0(기본)이면 자르지 않음")
     void 길이_제한_0이면_무제한() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .logTransformedSql(true)
-                .logTransformedSqlMaxLength(0)
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .logTransformedSql(true)
+                                                                     .logTransformedSqlMaxLength(0)
+                                                                     .build();
         inspector.inspect("select * from member where email = 'secret@example.com'");
 
         assertThat(appender.list)

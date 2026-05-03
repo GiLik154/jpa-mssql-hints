@@ -91,12 +91,14 @@ public class NoLockStatementInspector implements StatementInspector {
     /**
      * exclude/alwaysApply 패턴에 {@code .} / {@code [} / {@code ]}가 포함되면 schema-qualified로
      * 입력했을 가능성이 높지만 실제 테이블 비교는 schema-less다. 운영자 오해를 방지하기 위해 WARN.
+     * <p>호출부({@link Builder})에서 null은 항상 빈 리스트로 정규화되므로 여기서 별도 null 가드는 두지 않는다.
      */
+    private static final Pattern SCHEMA_QUALIFIED_CHARS = Pattern.compile("[.\\[\\]]");
+
     private static void warnOnSchemaQualified(List<String> patterns, String optionName) {
-        if (patterns == null) return;
         for (String p : patterns) {
             if (p == null) continue;
-            if (p.indexOf('.') >= 0 || p.indexOf('[') >= 0 || p.indexOf(']') >= 0) {
+            if (SCHEMA_QUALIFIED_CHARS.matcher(p).find()) {
                 log.warn("[jpa-mssql-hints] {} 패턴 '{}'에 schema/대괄호 문자가 포함되어 있습니다. " +
                         "테이블 비교는 schema-less라 의도와 다르게 매칭되지 않을 수 있습니다 " +
                         "(예: 'dbo.audit_log'은 'audit_log'와 매칭되지 않음).", optionName, p);
@@ -212,14 +214,11 @@ public class NoLockStatementInspector implements StatementInspector {
 
     /**
      * 모드/컨텍스트 기반 기본 적용 여부.
-     * (OFF는 inspect 진입 시점에 이미 걸러진다)
+     * (OFF는 {@link #inspect(String)} 진입 시점에 이미 걸러지므로 여기는 GLOBAL/ANNOTATION만 도달)
      */
     private boolean isDefaultActive() {
-        return switch (mode) {
-            case OFF -> false;
-            case GLOBAL -> true;
-            case ANNOTATION -> HintContext.isActive();
-        };
+        if (mode == Mode.GLOBAL) return true;
+        return HintContext.isActive(); // ANNOTATION
     }
 
     /**

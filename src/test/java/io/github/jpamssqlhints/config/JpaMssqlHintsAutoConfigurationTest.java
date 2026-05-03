@@ -34,6 +34,24 @@ class JpaMssqlHintsAutoConfigurationTest {
         }
 
         @Test
+        @DisplayName("HibernatePropertiesCustomizer는 Inspector를 hibernate.session_factory.statement_inspector 키로 등록")
+        void customizer_람다_동작() {
+            runner
+                    .withPropertyValues("jpa-mssql-hints.enabled=true")
+                    .run(context -> {
+                        HibernatePropertiesCustomizer customizer = context.getBean(HibernatePropertiesCustomizer.class);
+                        NoLockStatementInspector inspector = context.getBean(NoLockStatementInspector.class);
+
+                        java.util.Map<String, Object> props = new java.util.HashMap<>();
+                        customizer.customize(props);
+
+                        assertThat(props).containsKey("hibernate.session_factory.statement_inspector");
+                        assertThat(props.get("hibernate.session_factory.statement_inspector"))
+                                .isSameAs(inspector);
+                    });
+        }
+
+        @Test
         @DisplayName("Properties의 옵션이 Inspector 빌더에 전달된다")
         void 옵션_전달() {
             runner

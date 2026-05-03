@@ -76,9 +76,9 @@ class NoLockStatementInspectorHintsTest {
     @DisplayName("화이트리스트도 컨텍스트 힌트 종류를 따름 (READPAST 컨텍스트면 READPAST 적용)")
     void 화이트리스트_컨텍스트_힌트_따름() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.ANNOTATION)
-                .alwaysApplyTables(java.util.List.of("dashboard"))
-                .build();
+                                                                     .mode(Mode.ANNOTATION)
+                                                                     .alwaysApplyTables(java.util.List.of("dashboard"))
+                                                                     .build();
         HintContext.enter(Set.of(Hint.READPAST));
         String result = inspector.inspect("select * from dashboard where id = 1");
         assertThat(result).contains("WITH (READPAST)");

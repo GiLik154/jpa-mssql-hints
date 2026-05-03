@@ -42,8 +42,8 @@ class NoLockStatementInspectorSchemaWarnTest {
     @DisplayName("excludeTables에 'dbo.audit_log' 적으면 WARN")
     void schema_점이_포함된_excludeTables_WARN() {
         NoLockStatementInspector.builder()
-                .excludeTables(List.of("dbo.audit_log"))
-                .build();
+                                .excludeTables(List.of("dbo.audit_log"))
+                                .build();
 
         assertThat(appender.list)
                 .anyMatch(e -> e.getLevel() == Level.WARN
@@ -55,8 +55,8 @@ class NoLockStatementInspectorSchemaWarnTest {
     @DisplayName("alwaysApplyTables에 '[member]' 적으면 WARN")
     void 대괄호가_포함된_alwaysApplyTables_WARN() {
         NoLockStatementInspector.builder()
-                .alwaysApplyTables(List.of("[member]"))
-                .build();
+                                .alwaysApplyTables(List.of("[member]"))
+                                .build();
 
         assertThat(appender.list)
                 .anyMatch(e -> e.getLevel() == Level.WARN
@@ -68,9 +68,30 @@ class NoLockStatementInspectorSchemaWarnTest {
     @DisplayName("정상 패턴(스키마/대괄호 없음)은 WARN 없음")
     void 정상_패턴은_WARN_없음() {
         NoLockStatementInspector.builder()
-                .excludeTables(List.of("audit_log", "payment_*"))
-                .alwaysApplyTables(List.of("stat_*"))
-                .build();
+                                .excludeTables(List.of("audit_log", "payment_*"))
+                                .alwaysApplyTables(List.of("stat_*"))
+                                .build();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    @DisplayName("excludeTables/alwaysApplyTables를 null로 빌드해도 WARN 없이 정상")
+    void null_리스트는_WARN_없음() {
+        NoLockStatementInspector.builder()
+                                .excludeTables(null)
+                                .alwaysApplyTables(null)
+                                .build();
+
+        assertThat(appender.list).isEmpty();
+    }
+
+    @Test
+    @DisplayName("리스트 안에 null 항목이 섞여도 WARN 없음 (null은 건너뜀)")
+    void null_항목은_건너뜀() {
+        NoLockStatementInspector.builder()
+                                .excludeTables(java.util.Arrays.asList(null, "audit_log"))
+                                .build();
 
         assertThat(appender.list).isEmpty();
     }

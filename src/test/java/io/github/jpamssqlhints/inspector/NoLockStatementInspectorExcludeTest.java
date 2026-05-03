@@ -25,9 +25,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("블랙리스트 테이블에는 NOLOCK이 붙지 않는다")
     void 블랙리스트_제외() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         String result = inspector.inspect("select * from payment where id = 1");
         assertThat(result).doesNotContainIgnoringCase("WITH (NOLOCK)");
     }
@@ -36,9 +36,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("블랙리스트 외 테이블은 정상 적용")
     void 블랙리스트_외_적용() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         String result = inspector.inspect("select * from member where id = 1");
         assertThat(result).containsIgnoringCase("WITH (NOLOCK)");
     }
@@ -47,9 +47,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("다중 JOIN에서 블랙리스트 테이블만 NOLOCK 제외")
     void 다중_조인에서_부분_제외() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         String result = inspector.inspect(
                 "select * from member m inner join payment p on m.id = p.member_id"
         );
@@ -65,9 +65,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("블랙리스트 매칭은 대소문자 무관")
     void 대소문자_무관() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("Payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("Payment"))
+                                                                     .build();
         String result = inspector.inspect("select * from PAYMENT where id = 1");
         assertThat(result).doesNotContainIgnoringCase("WITH (NOLOCK)");
     }
@@ -76,9 +76,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("스키마.테이블 형식에서도 테이블명 기준으로 매칭")
     void 스키마_접두사_무시() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         String result = inspector.inspect("select * from dbo.payment where id = 1");
         assertThat(result).doesNotContainIgnoringCase("WITH (NOLOCK)");
     }
@@ -87,9 +87,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("대괄호 식별자에서도 테이블명 기준으로 매칭")
     void 대괄호_식별자() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.GLOBAL)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.GLOBAL)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         String result = inspector.inspect("select * from [dbo].[payment] where id = 1");
         assertThat(result).doesNotContainIgnoringCase("WITH (NOLOCK)");
     }
@@ -98,9 +98,9 @@ class NoLockStatementInspectorExcludeTest {
     @DisplayName("ANNOTATION 모드에서도 블랙리스트가 동작")
     void 어노테이션_모드에서도_제외() {
         NoLockStatementInspector inspector = NoLockStatementInspector.builder()
-                .mode(Mode.ANNOTATION)
-                .excludeTables(List.of("payment"))
-                .build();
+                                                                     .mode(Mode.ANNOTATION)
+                                                                     .excludeTables(List.of("payment"))
+                                                                     .build();
         HintContext.enter(Set.of(Hint.NOLOCK));
         String result = inspector.inspect("select * from payment where id = 1");
         assertThat(result).doesNotContainIgnoringCase("WITH (NOLOCK)");

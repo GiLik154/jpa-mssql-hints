@@ -25,14 +25,14 @@ public class JpaMssqlHintsAutoConfiguration {
     @ConditionalOnMissingBean
     public NoLockStatementInspector noLockStatementInspector(JpaMssqlHintsProperties properties) {
         return NoLockStatementInspector.builder()
-                .mode(properties.mode())
-                .excludeTables(properties.excludeTables())
-                .alwaysApplyTables(properties.alwaysApplyTables())
-                .requireReadOnly(properties.requireReadOnly())
-                .logTransformedSql(properties.logTransformedSql())
-                .logTransformedSqlMaxLength(properties.logTransformedSqlMaxLength())
-                .maxSqlLength(properties.maxSqlLength())
-                .build();
+                                       .mode(properties.mode())
+                                       .excludeTables(properties.excludeTables())
+                                       .alwaysApplyTables(properties.alwaysApplyTables())
+                                       .requireReadOnly(properties.requireReadOnly())
+                                       .logTransformedSql(properties.logTransformedSql())
+                                       .logTransformedSqlMaxLength(properties.logTransformedSqlMaxLength())
+                                       .maxSqlLength(properties.maxSqlLength())
+                                       .build();
     }
 
     @Bean
