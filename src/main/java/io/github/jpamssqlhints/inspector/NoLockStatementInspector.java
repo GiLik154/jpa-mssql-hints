@@ -20,8 +20,8 @@ import java.util.regex.Pattern;
 public class NoLockStatementInspector implements StatementInspector {
 
     private final Mode mode;
-    private final List<String> excludeTables;
-    private final List<String> alwaysApplyTables;
+    private final TablePatternMatcher excludeTables;
+    private final TablePatternMatcher alwaysApplyTables;
 
     public NoLockStatementInspector() {
         this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList());
@@ -37,13 +37,8 @@ public class NoLockStatementInspector implements StatementInspector {
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables) {
         this.mode = mode;
-        this.excludeTables = normalize(excludeTables);
-        this.alwaysApplyTables = normalize(alwaysApplyTables);
-    }
-
-    private static List<String> normalize(List<String> tables) {
-        return tables == null ? Collections.emptyList()
-                : tables.stream().map(String::toLowerCase).toList();
+        this.excludeTables = new TablePatternMatcher(excludeTables);
+        this.alwaysApplyTables = new TablePatternMatcher(alwaysApplyTables);
     }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
@@ -125,9 +120,9 @@ public class NoLockStatementInspector implements StatementInspector {
             String tableName = extractTableName(m.group(2));
             String original = m.group();
             boolean apply;
-            if (excludeTables.contains(tableName)) {
+            if (excludeTables.matches(tableName)) {
                 apply = false;
-            } else if (alwaysApplyTables.contains(tableName)) {
+            } else if (alwaysApplyTables.matches(tableName)) {
                 apply = true;
             } else {
                 apply = defaultActive;
