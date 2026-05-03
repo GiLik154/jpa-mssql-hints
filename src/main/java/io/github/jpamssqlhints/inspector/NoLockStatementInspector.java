@@ -21,19 +21,29 @@ public class NoLockStatementInspector implements StatementInspector {
 
     private final Mode mode;
     private final List<String> excludeTables;
+    private final List<String> alwaysApplyTables;
 
     public NoLockStatementInspector() {
-        this(Mode.ANNOTATION, Collections.emptyList());
+        this(Mode.ANNOTATION, Collections.emptyList(), Collections.emptyList());
     }
 
     public NoLockStatementInspector(Mode mode) {
-        this(mode, Collections.emptyList());
+        this(mode, Collections.emptyList(), Collections.emptyList());
     }
 
     public NoLockStatementInspector(Mode mode, List<String> excludeTables) {
+        this(mode, excludeTables, Collections.emptyList());
+    }
+
+    public NoLockStatementInspector(Mode mode, List<String> excludeTables, List<String> alwaysApplyTables) {
         this.mode = mode;
-        this.excludeTables = excludeTables == null ? Collections.emptyList()
-                : excludeTables.stream().map(String::toLowerCase).toList();
+        this.excludeTables = normalize(excludeTables);
+        this.alwaysApplyTables = normalize(alwaysApplyTables);
+    }
+
+    private static List<String> normalize(List<String> tables) {
+        return tables == null ? Collections.emptyList()
+                : tables.stream().map(String::toLowerCase).toList();
     }
 
     private static final Pattern SELECT_HEAD = Pattern.compile("^\\s*select\\b", Pattern.CASE_INSENSITIVE);
@@ -61,10 +71,16 @@ public class NoLockStatementInspector implements StatementInspector {
 
     @Override
     public String inspect(String sql) {
-        if (sql == null || !shouldApply()) {
+        // OFF 모드는 화이트리스트도 무시하는 절대 kill switch.
+        if (sql == null || mode == Mode.OFF) {
             return sql;
         }
         if (!SELECT_HEAD.matcher(sql).find()) {
+            return sql;
+        }
+        boolean defaultActive = isDefaultActive();
+        // 모드 기반 비활성 + 화이트리스트도 비어있으면 어떤 테이블도 적용 대상 아님.
+        if (!defaultActive && alwaysApplyTables.isEmpty()) {
             return sql;
         }
         // 이미 NOLOCK이 적용된 SQL은 추가 변환하지 않는다. 부분 매치로 인한
@@ -73,20 +89,20 @@ public class NoLockStatementInspector implements StatementInspector {
         if (lower.contains("with (nolock)") || lower.contains("with(nolock)")) {
             return sql;
         }
-        String result = appendHint(sql, FROM_TABLE);
-        result = appendHint(result, JOIN_TABLE);
+        String result = appendHint(sql, FROM_TABLE, defaultActive);
+        result = appendHint(result, JOIN_TABLE, defaultActive);
         return result;
     }
 
     /**
-     * 모드별 적용 여부 결정.
+     * 모드/컨텍스트 기반 기본 적용 여부.
      * <ul>
-     *   <li>OFF: 항상 미적용 (kill switch)</li>
-     *   <li>GLOBAL: 어노테이션과 무관하게 항상 적용</li>
-     *   <li>ANNOTATION: NoLockContext가 활성일 때만 적용</li>
+     *   <li>GLOBAL: 항상 활성</li>
+     *   <li>ANNOTATION: NoLockContext가 활성일 때만</li>
      * </ul>
+     * (OFF는 inspect 진입 시점에 이미 걸러진다)
      */
-    private boolean shouldApply() {
+    private boolean isDefaultActive() {
         return switch (mode) {
             case OFF -> false;
             case GLOBAL -> true;
@@ -94,15 +110,29 @@ public class NoLockStatementInspector implements StatementInspector {
         };
     }
 
-    private String appendHint(String sql, Pattern pattern) {
+    /**
+     * 테이블별 적용 여부:
+     * <ol>
+     *   <li>블랙리스트 매칭 → 무조건 미적용 (안전 우선)</li>
+     *   <li>화이트리스트 매칭 → 무조건 적용 (어노테이션 없어도)</li>
+     *   <li>그 외 → 모드/컨텍스트 기본값(defaultActive)</li>
+     * </ol>
+     */
+    private String appendHint(String sql, Pattern pattern, boolean defaultActive) {
         Matcher m = pattern.matcher(sql);
         StringBuilder sb = new StringBuilder();
         while (m.find()) {
             String tableName = extractTableName(m.group(2));
             String original = m.group();
-            String replacement = excludeTables.contains(tableName)
-                    ? original
-                    : original + " WITH (NOLOCK)";
+            boolean apply;
+            if (excludeTables.contains(tableName)) {
+                apply = false;
+            } else if (alwaysApplyTables.contains(tableName)) {
+                apply = true;
+            } else {
+                apply = defaultActive;
+            }
+            String replacement = apply ? original + " WITH (NOLOCK)" : original;
             m.appendReplacement(sb, Matcher.quoteReplacement(replacement));
         }
         m.appendTail(sb);
