@@ -41,7 +41,7 @@ repositories {
 }
 
 dependencies {
-    implementation 'com.github.GiLik154:jpa-mssql-hints:v0.1.0'
+    implementation 'com.github.GiLik154:jpa-mssql-hints:v1.0.0'
 }
 ```
 
@@ -58,7 +58,7 @@ dependencies {
 <dependency>
     <groupId>com.github.GiLik154</groupId>
     <artifactId>jpa-mssql-hints</artifactId>
-    <version>v0.1.0</version>
+    <version>v1.0.0</version>
 </dependency>
 ```
 

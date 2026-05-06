@@ -5,6 +5,10 @@
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)을 따르고,
 버전은 [Semantic Versioning](https://semver.org/lang/ko/)을 따릅니다.
 
+## [1.0.0] - 2026-05-07
+
+정식 1.0 릴리즈. 0.1.0의 기능 셋을 그대로 유지한 안정화 버전.
+
 ## [0.1.0] - 2026-05-03
 
 첫 안정 릴리즈.
@@ -59,4 +63,5 @@
 - 문자열 리터럴 안의 `from` 구분 불가 (정규식 한계)
 - 별도 스레드(`@Async` 등)로 컨텍스트 전파 안 됨
 
+[1.0.0]: https://github.com/GiLik154/jpa-mssql-hints/releases/tag/v1.0.0
 [0.1.0]: https://github.com/GiLik154/jpa-mssql-hints/releases/tag/v0.1.0
